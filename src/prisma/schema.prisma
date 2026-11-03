@@ -52,9 +52,8 @@ model User {
   githubUrl   String?
   bio         String?
 
-  resumes     Resume[] @relation(onDelete: Cascade)
-  application Application[] @relation(onDelete: Cascade)
-
+  resumes     Resume[] 
+  application Application[] 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
