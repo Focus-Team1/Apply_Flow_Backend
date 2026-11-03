@@ -9,6 +9,7 @@ const resumeController = new ResumeController();
 router.use(authMiddleware);
 
 router.get('/', resumeController.listResumes);
+router.get('/:id/file', resumeController.getResumeFile);
 router.get('/:id', resumeController.getResume);
 router.post('/', uploadSingleFile, resumeController.uploadResume);
 router.patch('/:id', resumeController.updateResume);

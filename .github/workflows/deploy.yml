@@ -1,0 +1,55 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [mainBranch]
+  workflow_dispatch:
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/jms-backend:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/jms-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            set -e
+            IMG=${{ secrets.DOCKERHUB_USERNAME }}/jms-backend
+            NEW=$IMG:${{ github.sha }}
+            PREV=$(docker inspect -f '{{.Config.Image}}' jms-backend 2>/dev/null || true)
+            RUN="docker run -d --name jms-backend --restart unless-stopped --network jms-net --env-file /home/opc/jms-backend.env -v jms_uploads:/app/uploads"
+            docker pull $NEW
+            docker rm -f jms-backend 2>/dev/null || true
+            $RUN $NEW
+            sleep 25
+            if [ "$(docker inspect -f '{{.State.Running}}' jms-backend)" = "true" ] && [ "$(docker inspect -f '{{.RestartCount}}' jms-backend)" = "0" ]; then
+              echo "Deploy OK"
+            else
+              echo "Backend failed, logs:"; docker logs --tail 40 jms-backend || true
+              docker rm -f jms-backend || true
+              [ -n "$PREV" ] && $RUN $PREV
+              exit 1
+            fi
+            docker image prune -f
