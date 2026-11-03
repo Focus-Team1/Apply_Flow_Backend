@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import multer from "multer";
 import { z } from "zod";
 
 import CustomError from "../utils/exception.utils.js";
@@ -14,6 +15,19 @@ export const errorMiddleware = (
   res: Response,
   _next: NextFunction
 ) => {
+  if (error instanceof multer.MulterError) {
+    const isFileTooLarge = error.code === "LIMIT_FILE_SIZE";
+    return res.status(isFileTooLarge ? 413 : statusCodes.badRequest).json({
+      success: false,
+      message: isFileTooLarge
+        ? "Uploaded file exceeds the allowed size limit"
+        : "Invalid file upload",
+      errorCode: isFileTooLarge ? "FILE_TOO_LARGE" : errorCodes.badRequest,
+      errors: [],
+      data: null,
+    });
+  }
+
   // Zod validation error
   if (error instanceof z.ZodError) {
     return res.status(statusCodes.badRequest).json({
