@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+// @ts-ignore bcrypt has no declaration file in this project
 import bcrypt from 'bcrypt';
 import { prisma } from '../../config/database.config.js';
 import { statusCodes, Message, errorCodes } from '../../constants/response.constants.js';
