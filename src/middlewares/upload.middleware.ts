@@ -1,16 +1,14 @@
 import multer from 'multer';
 import path from 'path';
-import { fileURLToPath } from 'url';
-
-// Get __dirname equivalent for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { Request } from 'express';
+import CustomError from '../utils/exception.utils.js';
+import { errorCodes, statusCodes } from '../constants/response.constants.js';
+import { UPLOAD_DIR } from '../config/upload.config.js';
 
 // Configure storage
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../../uploads');
-    cb(null, uploadDir);
+  destination: (_req, _file, cb) => {
+    cb(null, UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
     // Generate unique filename
@@ -22,13 +20,16 @@ const storage = multer.diskStorage({
 });
 
 // File filter - only allow PDF files
-const fileFilter = (req: any, file: any, cb: any) => {
+const fileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const allowedMimes = ['application/pdf'];
-  
-  if (allowedMimes.includes(file.mimetype)) {
+
+  if (
+    allowedMimes.includes(file.mimetype) &&
+    path.extname(file.originalname).toLowerCase() === '.pdf'
+  ) {
     cb(null, true);
   } else {
-    cb(new Error('Only PDF files are allowed'), false);
+    cb(new CustomError(statusCodes.badRequest, 'Only PDF files are allowed', errorCodes.badRequest));
   }
 };
 

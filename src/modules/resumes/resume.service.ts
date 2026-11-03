@@ -1,7 +1,45 @@
+import fs from 'fs/promises';
 import path from 'path';
 import { Resume } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
+import { UPLOAD_DIR } from '../../config/upload.config.js';
 import { AppException } from '../settings/common/exceptions/app.exception.js';
+
+const getResumeFilePath = (fileUrl: string): string => {
+  const prefix = '/uploads/';
+  const filename = fileUrl.startsWith(prefix) ? fileUrl.slice(prefix.length) : '';
+
+  if (
+    !filename ||
+    filename.includes('/') ||
+    filename.includes('\\') ||
+    path.basename(filename) !== filename
+  ) {
+    throw new AppException('Resume file not found', 404);
+  }
+
+  const filePath = path.resolve(UPLOAD_DIR, filename);
+  if (!filePath.startsWith(`${UPLOAD_DIR}${path.sep}`)) {
+    throw new AppException('Resume file not found', 404);
+  }
+
+  return filePath;
+};
+
+const cleanupUploadedFile = async (filePath: string): Promise<void> => {
+  try {
+    await fs.unlink(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.error('[ResumeService] Failed to clean up uploaded resume.', error);
+    }
+  }
+};
+
+const withProtectedFileUrl = (resume: Resume): Resume => ({
+  ...resume,
+  fileUrl: `/resumes/${resume.id}/file`,
+});
 
 export class ResumeService {
   async listResumes(userId: string, page: number = 1, limit: number = 10): Promise<any> {
@@ -18,7 +56,7 @@ export class ResumeService {
     ]);
 
     return {
-      resumes,
+      resumes: resumes.map(withProtectedFileUrl),
       pagination: {
         total,
         page,
@@ -39,15 +77,51 @@ export class ResumeService {
       throw new AppException('Resume not found', 404);
     }
 
-    return resume;
+    return withProtectedFileUrl(resume);
+  }
+
+  async getResumeFilePath(userId: string, resumeId: string): Promise<string> {
+    const resume = await prisma.resume.findFirst({
+      where: { id: resumeId, userId },
+    });
+
+    if (!resume) {
+      throw new AppException('Resume not found', 404);
+    }
+
+    const filePath = getResumeFilePath(resume.fileUrl);
+    try {
+      await fs.access(filePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new AppException('Resume file not found', 404);
+      }
+      throw error;
+    }
+
+    return filePath;
   }
 
   async createResume(userId: string, input: any): Promise<Resume> {
     const filename = input.generatedFileName;
     const fileUrl = `/uploads/${filename}`;
+    const filePath = getResumeFilePath(fileUrl);
+    const file = await fs.open(filePath, 'r');
+    const header = Buffer.alloc(1024);
+    let bytesRead = 0;
+    try {
+      ({ bytesRead } = await file.read(header, 0, header.length, 0));
+    } finally {
+      await file.close();
+    }
+
+    if (!header.subarray(0, bytesRead).includes(Buffer.from('%PDF-'))) {
+      await cleanupUploadedFile(filePath);
+      throw new AppException('Uploaded file is not a valid PDF', 400);
+    }
 
     try {
-      return await prisma.resume.create({
+      const resume = await prisma.resume.create({
         data: {
           userId,
           name: input.name,
@@ -56,16 +130,10 @@ export class ResumeService {
           fileUrl,
         },
       });
-    } catch {
-      const filePath = path.join('uploads', filename);
-      try {
-        const fs = await import('fs');
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      } catch {
-        // Ignore cleanup errors
-      }
+      return withProtectedFileUrl(resume);
+    } catch (error) {
+      console.error('[ResumeService] Failed to create resume record.', error);
+      await cleanupUploadedFile(filePath);
       throw new AppException('Failed to save resume', 500);
     }
   }
@@ -79,10 +147,11 @@ export class ResumeService {
       throw new AppException('Resume not found', 404);
     }
 
-    return prisma.resume.update({
+    const updated = await prisma.resume.update({
       where: { id: resumeId },
       data: { name },
     });
+    return withProtectedFileUrl(updated);
   }
 
   async deleteResume(userId: string, resumeId: string): Promise<void> {
@@ -94,19 +163,16 @@ export class ResumeService {
       throw new AppException('Resume not found', 404);
     }
 
-    await prisma.resume.delete({ where: { id: resumeId } });
-
-    const filename = resume.fileUrl.split('/').pop();
-    if (filename) {
-      const fs = await import('fs');
-      const filePath = path.join('uploads', filename);
-      try {
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      } catch {
-        // Ignore cleanup errors
+    const filePath = getResumeFilePath(resume.fileUrl);
+    try {
+      await fs.unlink(filePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error('[ResumeService] Failed to delete resume file.', error);
+        throw new AppException('Failed to delete resume file', 500);
       }
     }
+
+    await prisma.resume.delete({ where: { id: resumeId } });
   }
 }
