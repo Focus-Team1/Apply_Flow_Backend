@@ -9,12 +9,6 @@ import dashboardRoutes from "./modules/dashboard/dashboard.router.js";
 import resumeRoutes from "./modules/resumes/resume.router.js";
 import settingsRoutes from "./modules/settings/settings.router.js";
 
-// ES module __dirname
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 const app = express();
 
 // CORS configuration for frontend integration
@@ -25,10 +19,6 @@ app.use(cors({
 
 app.use(cookieParser());
 app.use(express.json());
-
-// Serve static files from uploads folder
-import path from "path";
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
