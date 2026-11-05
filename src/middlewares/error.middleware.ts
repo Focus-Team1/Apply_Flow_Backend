@@ -8,7 +8,6 @@ import {
   Message,
   errorCodes,
 } from "../constants/response.constants.js";
-import { logger } from "../utils/loggers.utils.js";
 
 export const errorMiddleware = (
   error: unknown,
@@ -52,10 +51,7 @@ export const errorMiddleware = (
   }
 
   // Unexpected error
-  logger.error(
-    { err: error instanceof Error ? error : new Error(String(error)) },
-    "Unhandled request error"
-  );
+ 
 
   return res.status(statusCodes.internalServerError).json({
     success: false,
