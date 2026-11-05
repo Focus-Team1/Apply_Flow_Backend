@@ -34,6 +34,23 @@ const verifyResumeOwnership = async (
     );
   }
 };
+
+/** Maps API `notes` onto the Prisma `Notes` column. Omits the field when notes was not sent. */
+const applyNotesField = <T extends { notes?: string | null }>(data: T) => {
+  const { notes, ...rest } = data;
+
+  if (notes === undefined) {
+    return rest;
+  }
+
+  if (notes === null) {
+    return { ...rest, Notes: null };
+  }
+
+  const trimmed = notes.trim();
+  return { ...rest, Notes: trimmed.length === 0 ? null : trimmed };
+};
+
 export const createApplication = async (req: Request) => {
   if (!req.user?.userId) {
     throw new customErrors(
@@ -48,11 +65,9 @@ export const createApplication = async (req: Request) => {
 
   await verifyResumeOwnership(data.resumeId, userId);
 
-  
-
   const application = await prisma.application.create({
     data: {
-      ...data,
+      ...applyNotesField(data),
       userId,
       statusHistory: {
         create: { status: data.status },
@@ -190,7 +205,7 @@ export const updateApplication = async (req: Request) => {
 
   const application = await prisma.application.update({
     where: { id },
-    data,
+    data: applyNotesField(data),
     include: { resume: true },
   });
 
