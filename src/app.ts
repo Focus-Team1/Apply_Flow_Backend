@@ -8,8 +8,10 @@ import applicationRoutes from "./modules/applications/application.router.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.router.js";
 import resumeRoutes from "./modules/resumes/resume.router.js";
 import settingsRoutes from "./modules/settings/settings.router.js";
-
+import requestLogger from "./middlewares/requestLogger.middleware.js";
 const app = express();
+
+app.use(requestLogger); // Use the request logger middleware
 
 // CORS configuration for frontend integration
 app.use(cors({
