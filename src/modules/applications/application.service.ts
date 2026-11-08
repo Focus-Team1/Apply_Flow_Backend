@@ -48,11 +48,12 @@ export const createApplication = async (req: Request) => {
 
   await verifyResumeOwnership(data.resumeId, userId);
 
-  
+  const { notes, ...applicationData } = data;
 
   const application = await prisma.application.create({
     data: {
-      ...data,
+      ...applicationData,
+      Notes: notes,
       userId,
       statusHistory: {
         create: { status: data.status },
@@ -155,6 +156,7 @@ export const getApplicationById = async (req: Request) => {
 
 export const updateApplication = async (req: Request) => {
   const data = updateApplicationSchema.parse(req.body);
+  const { notes, ...applicationData } = data;
   const userId = req.user.userId;
   const id  = req.params.id as string;
 
@@ -190,7 +192,10 @@ export const updateApplication = async (req: Request) => {
 
   const application = await prisma.application.update({
     where: { id },
-    data,
+    data: {
+      ...applicationData,
+      ...(notes !== undefined && { Notes: notes }),
+    },
     include: { resume: true },
   });
 
