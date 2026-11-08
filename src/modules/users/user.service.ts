@@ -234,9 +234,9 @@ export const changePassword = async (req: Request) => {
   const isPasswordValid = await bcrypt.compare(currentPassword, user.password || '');
   if (!isPasswordValid) {
     throw new customErrors(
-      statusCodes.unauthorized,
+      statusCodes.badRequest,
       "Current password is incorrect",
-      errorCodes.unauthorized
+      errorCodes.invalidInput
     );
   }
 
